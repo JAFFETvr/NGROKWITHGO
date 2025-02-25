@@ -11,7 +11,7 @@ func Routes(engine *gin.Engine) {
 	routes := engine.Group("pull_request")
 
 	{
-		routes.POST("process", handlers.PullRequestEvent)
+		routes.POST("process", handlers.GitHubEventHandler)
 	}
 
 }
