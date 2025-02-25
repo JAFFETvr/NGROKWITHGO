@@ -9,7 +9,7 @@ import (
 
 	"github.com/joho/godotenv"
 )
-
+	
 type DiscordPayload struct {
 	Content string `json:"content"`
 }
