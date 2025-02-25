@@ -47,7 +47,7 @@ func ProcessPush(payload []byte) int {
 	}
 
 	commits := data["commits"].([]interface{})
-	message := "Nuevo push detectado:\n"
+	message := "Cambio :\n"
 
 	for _, c := range commits {
 		commit := c.(map[string]interface{})
@@ -70,7 +70,7 @@ func sendDiscordMessage(url, message string) int {
 	}
 
 	defer resp.Body.Close()
-	log.Println("Mensaje enviado a Discord con estado:", resp.StatusCode)
+	log.Println("Mensaje enviado a Discord de estado:", resp.StatusCode)
 	return resp.StatusCode
 }
 
