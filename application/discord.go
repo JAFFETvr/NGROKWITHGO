@@ -9,27 +9,59 @@ import (
 
 	"github.com/joho/godotenv"
 )
-
+	
 type DiscordPayload struct {
 	Content string `json:"content"`
 }
 
-// Cargar variables de entorno
-func loadEnv() {
-	if err := godotenv.Load(); err != nil {
-		log.Println("Advertencia: No se pudo cargar el archivo .env")
+func SendDiscordNotification(content string) {
+	godotenv.Load()
+	webhookURL := os.Getenv("DISCORD_WEBHOOK_URL")
+
+	if webhookURL == "" {
+		log.Println("No se encontró la URL del webhook de Discord en .env")
+		return
+	}
+
+	payload := DiscordPayload{Content: content}
+	jsonData, _ := json.Marshal(payload)
+
+	_, err := http.Post(webhookURL, "application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
+		log.Println("Error al enviar mensaje a Discord:", err)
 	}
 }
 
-// Función genérica para enviar mensajes a Discord
-func postDiscordMessage(webhookURL, message string) int {
+func HandlePushEvent(payload []byte) int {
+	webhookURL := os.Getenv("DISCORD_WEBHOOK_URL")
+
 	if webhookURL == "" {
-		log.Println("Error: Webhook de Discord no configurado.")
+		log.Println("Error: Webhook de Discord no configurado en .env")
 		return 500
 	}
 
+	var data map[string]interface{}
+	if err := json.Unmarshal(payload, &data); err != nil {
+		log.Println("Error al parsear el payload:", err)
+		return 500
+	}
+
+	commits := data["commits"].([]interface{})
+	message := "Cambios recientes:\n"
+
+	for _, commit := range commits {
+		commitData := commit.(map[string]interface{})
+		author := commitData["author"].(map[string]interface{})["name"]
+		commitMessage := commitData["message"]
+		message += "- " + author.(string) + ": " + commitMessage.(string) + "\n"
+	}
+
+	return postDiscordMessage(webhookURL, message)
+}
+
+func postDiscordMessage(url, message string) int {
 	body, _ := json.Marshal(DiscordPayload{Content: message})
-	response, err := http.Post(webhookURL, "application/json", bytes.NewBuffer(body))
+	response, err := http.Post(url, "application/json", bytes.NewBuffer(body))
 
 	if err != nil {
 		log.Println("Error al enviar mensaje a Discord:", err)
@@ -39,80 +71,4 @@ func postDiscordMessage(webhookURL, message string) int {
 	defer response.Body.Close()
 	log.Println("Mensaje enviado a Discord con estado:", response.StatusCode)
 	return response.StatusCode
-}
-
-// Manejo de eventos PUSH
-func HandlePushEvent(payload []byte) int {
-	loadEnv()
-	webhookURL := os.Getenv("DISCORD_WEBHOOK_URL")
-
-	var data map[string]interface{}
-	if err := json.Unmarshal(payload, &data); err != nil {
-		log.Println("Error al parsear el payload:", err)
-		return 500
-	}
-
-	commits, ok := data["commits"].([]interface{})
-	if !ok {
-		log.Println("Error: No se encontraron commits en el payload")
-		return 500
-	}
-
-	message := "**Cambios recientes en el repositorio**\n"
-	for _, commit := range commits {
-		commitData := commit.(map[string]interface{})
-		author := commitData["author"].(map[string]interface{})["name"].(string)
-		commitMessage := commitData["message"].(string)
-		message += "- " + author + ": " + commitMessage + "\n"
-	}
-
-	return postDiscordMessage(webhookURL, message)
-}
-
-// Manejo de eventos WORKFLOW_RUN
-func HandleWorkflowRunEvent(payload []byte) int {
-	loadEnv()
-	webhookURL := os.Getenv("DISCORD_WEBHOOK_TESTS")
-
-	var data struct {
-		Action      string `json:"action"`
-		WorkflowRun struct {
-			Name       string `json:"name"`
-			Status     string `json:"status"`
-			Conclusion string `json:"conclusion"`
-			URL        string `json:"html_url"`
-		} `json:"workflow_run"`
-		Repository struct {
-			FullName string `json:"full_name"`
-		} `json:"repository"`
-	}
-
-	if err := json.Unmarshal(payload, &data); err != nil {
-		log.Println("Error al parsear el payload de workflow_run:", err)
-		return 500
-	}
-
-	// Determinar estado del workflow
-	var estado string
-	switch data.WorkflowRun.Status {
-	case "completed":
-		if data.WorkflowRun.Conclusion == "success" {
-			estado = "✅ Exitoso"
-		} else {
-			estado = "❌ Falló"
-		}
-	case "in_progress":
-		estado = "⏳ En progreso"
-	default:
-		estado = "❓ Desconocido"
-	}
-
-	// Construir mensaje para Discord
-	message := "**GitHub Actions Workflow Ejecutado**\n" +
-		"📂 Repositorio: " + data.Repository.FullName + "\n" +
-		"🔄 Workflow: " + data.WorkflowRun.Name + "\n" +
-		"📌 Estado: " + estado + "\n" +
-		"🔗 [Ver detalles](" + data.WorkflowRun.URL + ")"
-
-	return postDiscordMessage(webhookURL, message)
 }

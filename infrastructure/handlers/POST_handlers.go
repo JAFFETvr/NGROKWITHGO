@@ -26,8 +26,6 @@ func GitHubEventHandler(ctx *gin.Context) {
 		status = application.HandlePullRequestEvent(payload)
 	case "push":
 		status = application.HandlePushEvent(payload)
-	case "workflow_run":  // 📌 Agregamos soporte para workflow_run
-		status = application.HandleWorkflowRunEvent(payload)
 	default:
 		log.Printf("Evento no manejado: %s", eventType)
 		ctx.JSON(http.StatusNotImplemented, gin.H{"status": "Evento no soportado"})
